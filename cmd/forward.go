@@ -5,11 +5,12 @@ import (
 
 	"github.com/bendrucker/kubernetes-port-forward-remote/pkg/forward"
 	"github.com/spf13/cobra"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-func NewForwardCommand() *cobra.Command {
+func NewForwardCommand(streams genericclioptions.IOStreams) *cobra.Command {
 	overrides := clientcmd.ConfigOverrides{}
 
 	cmd := &cobra.Command{
@@ -48,9 +49,7 @@ func NewForwardCommand() *cobra.Command {
 				Namespace: ns,
 				Client:    clientset,
 				Config:    config,
-
-				Stdout: cmd.OutOrStdout(),
-				Stderr: cmd.ErrOrStderr(),
+				IOStreams: streams,
 			}
 
 			return forwarder.Forward(cmd.Context(), spec)
@@ -62,7 +61,7 @@ func NewForwardCommand() *cobra.Command {
 	return cmd
 }
 
-func Execute() {
-	cmd := NewForwardCommand()
+func Execute(streams genericclioptions.IOStreams) {
+	cmd := NewForwardCommand(streams)
 	cobra.CheckErr(cmd.Execute())
 }

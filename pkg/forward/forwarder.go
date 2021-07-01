@@ -3,7 +3,6 @@ package forward
 import (
 	"context"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/httpstream"
 	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/portforward"
@@ -33,8 +33,7 @@ type Forwarder struct {
 	Client    *kubernetes.Clientset
 	Config    *rest.Config
 
-	Stdout io.Writer
-	Stderr io.Writer
+	genericclioptions.IOStreams
 
 	pod string
 }
@@ -52,7 +51,7 @@ func (f *Forwarder) Forward(ctx context.Context, spec Spec) error {
 		return err
 	}
 
-	fw, err := portforward.New(dialer, []string{spec.String()}, make(chan struct{}), make(chan struct{}), f.Stdout, f.Stderr)
+	fw, err := portforward.New(dialer, []string{spec.String()}, make(chan struct{}), make(chan struct{}), f.Out, f.ErrOut)
 	if err != nil {
 		return err
 	}
