@@ -2,10 +2,8 @@ package cmd
 
 import (
 	"errors"
-	"flag"
 	"fmt"
 	"net/http"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -17,10 +15,9 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
-	"k8s.io/client-go/util/homedir"
 )
 
-var cfgFile string
+var overrides clientcmd.ConfigOverrides
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -36,16 +33,12 @@ to quickly create a Cobra application.`,
 	// has an action associated with it:
 	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		var kubeconfig *string
-		if home := homedir.HomeDir(); home != "" {
-			kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-		} else {
-			kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-		}
-		flag.Parse()
+		kc := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+			clientcmd.NewDefaultClientConfigLoadingRules(),
+			&overrides,
+		)
 
-		// use the current context in kubeconfig
-		config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+		config, err := kc.ClientConfig()
 		if err != nil {
 			panic(err.Error())
 		}
@@ -136,4 +129,5 @@ func Execute() {
 }
 
 func init() {
+	clientcmd.BindOverrideFlags(&overrides, rootCmd.PersistentFlags(), clientcmd.RecommendedConfigOverrideFlags(""))
 }
