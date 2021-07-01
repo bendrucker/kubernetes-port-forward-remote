@@ -1,20 +1,12 @@
 package cmd
 
 import (
-	"errors"
-	"fmt"
-	"net/http"
 	"strconv"
-	"time"
 
+	"github.com/bendrucker/kubernetes-port-forward-remote/pkg/forward"
 	"github.com/spf13/cobra"
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/tools/portforward"
-	"k8s.io/client-go/transport/spdy"
 )
 
 var overrides clientcmd.ConfigOverrides
@@ -32,7 +24,7 @@ to quickly create a Cobra application.`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	Args: cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		kc := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 			clientcmd.NewDefaultClientConfigLoadingRules(),
 			&overrides,
@@ -40,87 +32,36 @@ to quickly create a Cobra application.`,
 
 		config, err := kc.ClientConfig()
 		if err != nil {
-			panic(err.Error())
+			return err
 		}
 
 		clientset, err := kubernetes.NewForConfig(config)
 		if err != nil {
-			panic(err.Error())
+			return err
 		}
 
 		port, err := strconv.Atoi(args[1])
 		if err != nil {
-			panic(err.Error())
+			return err
 		}
 
-		pod, err := clientset.CoreV1().Pods("default").Create(cmd.Context(), &v1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: "port-forward-remote-",
-			},
-			Spec: v1.PodSpec{
-				Containers: []v1.Container{
-					{
-						Name:  "socat",
-						Image: "alpine/socat",
-						Args: []string{
-							fmt.Sprintf("tcp-listen:%d,fork,reuseaddr", port),
-							fmt.Sprintf("tcp-connect:%s:%d", args[0], port),
-						},
-						Ports: []v1.ContainerPort{
-							{
-								Name:          "forwarded",
-								ContainerPort: int32(port),
-							},
-						},
-					},
-				},
-			},
-		}, metav1.CreateOptions{})
-
-		if err != nil {
-			panic(err.Error())
+		spec := forward.Spec{
+			LocalPort:  0,
+			RemoteHost: args[0],
+			RemotePort: port,
 		}
 
-		defer func() {
-			if err := clientset.CoreV1().Pods(pod.Namespace).Delete(cmd.Context(), pod.Name, metav1.DeleteOptions{}); err != nil {
-				panic(err)
-			}
-		}()
+		ns, _, _ := kc.Namespace()
+		forwarder := forward.Forwarder{
+			Namespace: ns,
+			Client:    clientset,
+			Config:    config,
 
-		err = wait.PollImmediate(time.Second, time.Minute, func() (bool, error) {
-			p, err := clientset.CoreV1().Pods(pod.Namespace).Get(cmd.Context(), pod.Name, metav1.GetOptions{})
-			if err != nil {
-				return false, err
-			}
-
-			switch p.Status.Phase {
-			case v1.PodRunning:
-				fmt.Println("pod running")
-				return true, nil
-			case v1.PodFailed, v1.PodSucceeded:
-				return false, errors.New("pod completed")
-			}
-			return false, nil
-		})
-		if err != nil {
-			panic(err)
+			Stdout: cmd.OutOrStdout(),
+			Stderr: cmd.ErrOrStderr(),
 		}
 
-		transport, upgrader, err := spdy.RoundTripperFor(config)
-		if err != nil {
-			panic(err.Error())
-		}
-		dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, "POST", clientset.RESTClient().Post().Prefix("api/v1").Resource("pods").Namespace("default").Name(pod.Name).SubResource("portforward").URL())
-
-		fw, err := portforward.New(dialer, []string{fmt.Sprintf("0:%d", port)}, make(chan struct{}), make(chan struct{}), cmd.OutOrStdout(), cmd.ErrOrStderr())
-		if err != nil {
-			panic(err.Error())
-		}
-
-		err = fw.ForwardPorts()
-		if err != nil {
-			panic(err.Error())
-		}
+		return forwarder.Forward(cmd.Context(), spec)
 	},
 }
 
