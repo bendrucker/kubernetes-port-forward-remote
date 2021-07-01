@@ -82,7 +82,9 @@ to quickly create a Cobra application.`,
 		}
 
 		defer func() {
-			// _ = clientset.CoreV1().Pods(pod.Namespace).Delete(cmd.Context(), pod.Name, metav1.DeleteOptions{})
+			if err := clientset.CoreV1().Pods(pod.Namespace).Delete(cmd.Context(), pod.Name, metav1.DeleteOptions{}); err != nil {
+				panic(err)
+			}
 		}()
 
 		err = wait.PollImmediate(time.Second, time.Minute, func() (bool, error) {
