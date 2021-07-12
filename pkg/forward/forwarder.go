@@ -22,6 +22,8 @@ type Spec struct {
 
 	RemoteHost string
 	RemotePort int
+
+	Timeout time.Duration
 }
 
 func (s *Spec) String() string {
@@ -73,12 +75,7 @@ func (f *Forwarder) dialer() (httpstream.Dialer, error) {
 }
 
 func (f *Forwarder) createPod(ctx context.Context, spec Spec) error {
-	pod, err := f.Client.CoreV1().Pods(f.Namespace).Create(ctx, &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: "port-forward-remote-",
-		},
-		Spec: podSpec(spec),
-	}, metav1.CreateOptions{})
+	pod, err := f.Client.CoreV1().Pods(f.Namespace).Create(ctx, Pod(spec), metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
@@ -94,27 +91,6 @@ func (f *Forwarder) createPod(ctx context.Context, spec Spec) error {
 
 func (f *Forwarder) deletePod(ctx context.Context) error {
 	return f.Client.CoreV1().Pods(f.Namespace).Delete(ctx, f.pod, metav1.DeleteOptions{})
-}
-
-func podSpec(spec Spec) v1.PodSpec {
-	return v1.PodSpec{
-		Containers: []v1.Container{
-			{
-				Name:  "socat",
-				Image: "alpine/socat",
-				Args: []string{
-					fmt.Sprintf("tcp-listen:%d,fork,reuseaddr", spec.RemotePort),
-					fmt.Sprintf("tcp-connect:%s:%d", spec.RemoteHost, spec.RemotePort),
-				},
-				Ports: []v1.ContainerPort{
-					{
-						Name:          "forwarded",
-						ContainerPort: int32(spec.RemotePort),
-					},
-				},
-			},
-		},
-	}
 }
 
 func waitPodRunning(ctx context.Context, client kubernetes.Interface, pod *v1.Pod) error {
