@@ -71,7 +71,7 @@ func (f *Forwarder) dialer() (httpstream.Dialer, error) {
 		return nil, err
 	}
 
-	return spdy.NewDialer(upgrader, &http.Client{Transport: transport}, "POST", f.Client.RESTClient().Post().Prefix("api/v1").Resource("pods").Namespace("default").Name(f.pod).SubResource("portforward").URL()), nil
+	return spdy.NewDialer(upgrader, &http.Client{Transport: transport}, "POST", f.Client.RESTClient().Post().Prefix("api/v1").Resource("pods").Namespace(f.Namespace).Name(f.pod).SubResource("portforward").URL()), nil
 }
 
 func (f *Forwarder) createPod(ctx context.Context, spec Spec) error {
