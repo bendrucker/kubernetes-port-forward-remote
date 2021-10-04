@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -45,6 +48,19 @@ func (f *Forwarder) Forward(ctx context.Context, spec Spec) error {
 	if err != nil {
 		return err
 	}
+
+	ch, _ := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-ch.Done()
+
+		if err := f.deletePod(ctx); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
+		os.Exit(0)
+	}()
 
 	defer f.deletePod(ctx)
 
