@@ -3,6 +3,7 @@ package forward
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -55,8 +56,7 @@ func (f *Forwarder) Forward(ctx context.Context, spec Spec) error {
 		<-ch.Done()
 
 		if err := f.deletePod(ctx); err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+			log.Fatal(err)
 		}
 
 		os.Exit(0)
