@@ -3,11 +3,7 @@ package forward
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -44,23 +40,11 @@ type Forwarder struct {
 	pod string
 }
 
-func (f *Forwarder) Forward(ctx context.Context, spec Spec) error {
+func (f *Forwarder) Forward(ctx context.Context, spec Spec, stopChan chan struct{}) error {
 	err := f.createPod(ctx, spec)
 	if err != nil {
 		return err
 	}
-
-	ch, _ := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		<-ch.Done()
-
-		if err := f.deletePod(ctx); err != nil {
-			log.Fatal(err)
-		}
-
-		os.Exit(0)
-	}()
 
 	defer f.deletePod(ctx)
 
@@ -69,7 +53,7 @@ func (f *Forwarder) Forward(ctx context.Context, spec Spec) error {
 		return err
 	}
 
-	fw, err := portforward.New(dialer, []string{spec.String()}, make(chan struct{}), make(chan struct{}), f.Out, f.ErrOut)
+	fw, err := portforward.New(dialer, []string{spec.String()}, stopChan, make(chan struct{}), f.Out, f.ErrOut)
 	if err != nil {
 		return err
 	}

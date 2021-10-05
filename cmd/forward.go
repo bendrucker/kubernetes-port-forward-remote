@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 
 	"github.com/bendrucker/kubernetes-port-forward-remote/pkg/forward"
 	"github.com/spf13/cobra"
@@ -10,7 +13,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-func NewForwardCommand(streams genericclioptions.IOStreams) *cobra.Command {
+func NewForwardCommand(streams genericclioptions.IOStreams, stopChan chan struct{}) *cobra.Command {
 	overrides := clientcmd.ConfigOverrides{}
 
 	cmd := &cobra.Command{
@@ -52,7 +55,7 @@ func NewForwardCommand(streams genericclioptions.IOStreams) *cobra.Command {
 				IOStreams: streams,
 			}
 
-			return forwarder.Forward(cmd.Context(), spec)
+			return forwarder.Forward(cmd.Context(), spec, stopChan)
 		},
 	}
 
@@ -62,6 +65,17 @@ func NewForwardCommand(streams genericclioptions.IOStreams) *cobra.Command {
 }
 
 func Execute(streams genericclioptions.IOStreams) {
-	cmd := NewForwardCommand(streams)
+	stopChan := make(chan struct{})
+
+	cmd := NewForwardCommand(streams, stopChan)
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-sigChan
+		stopChan <- struct{}{}
+	}()
+
 	cobra.CheckErr(cmd.Execute())
 }
